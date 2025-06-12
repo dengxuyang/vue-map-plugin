@@ -1,7 +1,27 @@
 # vue-map-plugin
 
 基于 Vue3 的多地图（高德、百度、谷歌）插件，支持地图容器组件和统一服务 API，方便在项目中快速集成多种主流地图。
+当前开发进度
+根据你当前 AMapService.js 的实现和开发进度，建议在 README 中补充以下内容：
 
+---
+
+## 当前开发进度
+
+**注意：目前本插件仅实现了高德地图（AMap）文档中的全部功能，百度地图（BMap）和谷歌地图（Google Map）部分尚未开发，敬请期待后续更新。欢迎关注和 Star 项目进展！**
+
+项目地址：[https://github.com/dengxuyang/vue-map-plugin.git](https://github.com/dengxuyang/vue-map-plugin.git)
+
+---
+---
+
+## 未来计划
+
+- [ ] 百度地图（BMap）支持
+- [ ] 谷歌地图（Google Map）支持
+- [ ] 更多地图高级功能
+
+---
 ## 安装
 
 推荐使用 pnpm / npm / yarn 安装：
@@ -188,12 +208,97 @@ const track = service.addTrack([
 service.removeTrack(track)
 service.clearTracks()
 ```
+### 轨迹动画（逐点轨迹）相当于轨迹回放
 
+```js
+// 逐点绘制轨迹动画
+const controller = service.createTrackStepByStep([
+  [lng1, lat1],
+  [lng2, lat2],
+  [lng3, lat3]
+], {
+  interval: 500, // 每个点之间的间隔（毫秒）
+  onProgress: (index, position, progress) => {
+    // index: 当前点索引
+    // position: 当前点坐标
+    // progress: 进度百分比（0~1）
+  },
+  onFinish: () => {
+    // 动画完成回调
+  }
+})
+
+// 控制动画
+controller.start()   // 开始动画
+controller.stop()    // 暂停动画
+controller.destroy() // 移除轨迹及相关标记
+```
+
+### 清除所有逐点轨迹
+
+```js
+service.clearStepTracks()
+```
+
+### 绘制模式（draw）
+
+通过 `draw` 方法可以让用户在地图上交互式绘制点、线、面等几何图形，适用于自定义标记、路径、区域等场景。
+
+#### 方法签名
+
+```js
+service.draw(type, options) : Promise<overlay>
+```
+
+- `type`：绘制类型，支持 `'marker'`（点）、`'polyline'`（折线）、`'polygon'`（多边形）、`'rectangle'`（矩形）、`'circle'`（圆）。
+- `options`：绘制参数（可选），如样式、颜色等，具体可参考高德 MouseTool 配置。
+
+#### 返回值
+
+- 返回一个 Promise，resolve 时参数为绘制完成的覆盖物对象（如 Marker、Polyline、Polygon 等）。
+
+#### 使用示例
+
+```js
+// 绘制一个多边形
+service.draw('polygon', {
+  strokeColor: '#f00',
+  fillColor: '#0f0',
+  fillOpacity: 0.4
+}).then(polygon => {
+  // polygon 为绘制完成的多边形实例
+  console.log('绘制完成', polygon)
+})
+
+// 绘制一个点
+service.draw('marker').then(marker => {
+  // marker 为绘制完成的标记点实例
+})
+```
+
+#### 关闭绘制模式
+
+```js
+service.closeDraw()
+```
+
+#### 注意事项
+
+- 开启绘制模式后，鼠标指针会变为十字形，绘制完成后自动恢复。
+- 若需中途取消绘制，可调用 `closeDraw()`。
+- 支持多种类型的覆盖物绘制，参数与高德 MouseTool 保持一致。
+
+---
+
+如需更详细的参数说明，请参考高德地图官方 [MouseTool 文档](https://lbs.amap.com/api/jsapi-v2/documentation#mouseTool)。
 ### 其他常用方法
 
 - `service.setCenter([lng, lat])` 设置中心点
 - `service.setZoom(zoom)` 设置缩放级别
 - `service.fitView(positions)` 自动适应视野
+- `service.setRotation(angle, animate = true, duration = 300) ` 地图旋转
+- `service.getRotation() ` 获取地图旋转角度
+- `service.rotateToDirection(direction, animate = true)` 旋转到指定方向 方向：'north'(正北), 'east'(正东), 'south'(正南), 'west'(正西)
 - `service.switchBaseLayer(type)` 切换底图（normal/satellite/roadNet）
 - `service.addOverlayLayer(type, options)` 添加叠加图层（traffic/buildings/custom）
 - `service.removeOverlayLayer(layer)` / `service.clearOverlayLayers()`

@@ -46,6 +46,7 @@ class AMapService {
       // this.map.addControl(toolbar); //添加工具条插件到页面
       // var scale = new AMap.Scale();
       // this.map.addControl(scale);
+
       return this.map;
     } catch (error) {
       console.error("高德地图初始化失败:", error);
@@ -79,6 +80,8 @@ class AMapService {
       draggable: options.draggable || false,
       extData: options.extData || {},
       bubble: options.bubble || false,
+      offset: options.offset || new this.AMap.Pixel(0, 0),
+      label: options.label || null,
     });
 
     if (options.click) {
@@ -197,8 +200,10 @@ class AMapService {
       fillOpacity: options.fillOpacity || 0.3,
       strokeColor: options.strokeColor || "#1791fc",
       strokeWeight: options.strokeWeight || 2,
+      strokeStyle: options.strokeStyle || "solid",
+      draggable: options.draggable || false,
+      zIndex: options.zIndex || true,
       extData: options.extData || {},
-     
     });
 
     if (options.click) {
@@ -511,96 +516,409 @@ class AMapService {
     this.overlays = [];
   }
   /**
- * 添加轨迹
- * @param {Array} path - 轨迹点数组，每个元素为 [lng, lat]
- * @returns {Object} - 返回 { polyline, startMarker, endMarker }
- */
-addTrack(path) {
-   if (!this.map || !this.AMap || !Array.isArray(path) || path.length < 2) return null;
-  console.log('path', path)
-  // 添加白色轨迹线
-  const polyline = new this.AMap.Polyline({
-    path,
-    strokeColor: "#fff",
-    strokeWeight: 4,
-    strokeOpacity: 1,
-    lineJoin: "round",
-    lineCap: "round",
-    zIndex: 50,
-  });
-  this.map.add(polyline);
+   * 添加轨迹
+   * @param {Array} path - 轨迹点数组，每个元素为 [lng, lat]
+   * @returns {Object} - 返回 { polyline, startMarker, endMarker }
+   */
+  addTrack(path) {
+    if (!this.map || !this.AMap || !Array.isArray(path) || path.length < 2)
+      return null;
+    // 添加白色轨迹线
+    const polyline = new this.AMap.Polyline({
+      path,
+      strokeColor: "#fff",
+      strokeWeight: 4,
+      strokeOpacity: 1,
+      lineJoin: "round",
+      lineCap: "round",
+      zIndex: 50,
+    });
+    this.map.add(polyline);
 
-  // 起点：白色圆形
-  const startMarker = new this.AMap.Marker({
-    position: path[0],
-    icon: new this.AMap.Icon({
-      image: '', // 不用图片，直接用自定义内容
-      size: new this.AMap.Size(16, 16),
-    }),
-    content: `<div style="
+    // 起点：白色圆形
+    const startMarker = new this.AMap.Marker({
+      position: path[0],
+      icon: new this.AMap.Icon({
+        image: "", // 不用图片，直接用自定义内容
+        size: new this.AMap.Size(16, 16),
+      }),
+      content: `<div style="
       width:16px;height:16px;
       background:#fff;
       border-radius:50%;
       border:2px solid #fff;
       box-shadow:0 0 4px #888;
       "></div>`,
-    offset: new this.AMap.Pixel(-8, -8),
-    zIndex: 60,
-  });
-  this.map.add(startMarker);
+      offset: new this.AMap.Pixel(-8, -8),
+      zIndex: 60,
+    });
+    this.map.add(startMarker);
 
-  // 终点：蓝色圆形，比起点大
-  const endMarker = new this.AMap.Marker({
-    position: path[path.length - 1],
-    icon: new this.AMap.Icon({
-      image: '',
-      size: new this.AMap.Size(22, 22),
-    }),
-    content: `<div style="
+    // 终点：蓝色圆形，比起点大
+    const endMarker = new this.AMap.Marker({
+      position: path[path.length - 1],
+      icon: new this.AMap.Icon({
+        image: "",
+        size: new this.AMap.Size(22, 22),
+      }),
+      content: `<div style="
       width:22px;height:22px;
       background:#1890ff;
       border-radius:50%;
       border:3px solid #fff;
       box-shadow:0 0 6px #1890ff;
       "></div>`,
-    offset: new this.AMap.Pixel(-11, -11),
-    zIndex: 61,
-  });
-  this.map.add(endMarker);
+      offset: new this.AMap.Pixel(-11, -11),
+      zIndex: 61,
+    });
+    this.map.add(endMarker);
 
-  // 可选：保存到实例属性，便于后续管理
-  if (!this.tracks) this.tracks = [];
-  this.tracks.push({ polyline, startMarker, endMarker });
+    // 可选：保存到实例属性，便于后续管理
+    if (!this.tracks) this.tracks = [];
+    this.tracks.push({ polyline, startMarker, endMarker, path });
 
-  return { polyline, startMarker, endMarker };
-}
-
-/**
- * 移除指定轨迹
- * @param {Object} trackObj - addTrack 返回的对象
- */
-removeTrack(trackObj) {
-  if (!this.map || !trackObj) return;
-  if (trackObj.polyline) this.map.remove(trackObj.polyline);
-  if (trackObj.startMarker) this.map.remove(trackObj.startMarker);
-  if (trackObj.endMarker) this.map.remove(trackObj.endMarker);
-  if (this.tracks) {
-    this.tracks = this.tracks.filter(t => t !== trackObj);
+    return { polyline, startMarker, endMarker, path };
   }
-}
+  /**
+   * 逐点创建轨迹
+   * @param {Array} path - 轨迹点数组，每个元素为 [lng, lat]
+   * @param {Object} options - 配置选项
+   * @param {Number} options.interval - 每点之间的时间间隔(毫秒)，默认500
+   * @param {Function} options.onProgress - 进度回调，参数(index, position, progress)
+   * @param {Function} options.onFinish - 完成回调
+   * @returns {Object} - 返回控制对象 { start, stop }
+   */
+  createTrackStepByStep(path, options = {}) {
+    if (!this.map || !this.AMap || !Array.isArray(path) || path.length < 2)
+      return null;
 
-/**
- * 移除所有轨迹
- */
-clearTracks() {
-  if (!this.map || !this.tracks) return;
-  this.tracks.forEach(trackObj => {
+    const interval = options.interval || 500;
+    const mapInstance = this.map; // 保存地图实例的引用
+
+    // 创建轨迹线 - 与 addTrack 保持一致的样式
+    const polyline = new this.AMap.Polyline({
+      path: [path[0]],
+      strokeColor: "#fff", // 与 addTrack 一致的白色
+      strokeWeight: 4,
+      strokeOpacity: 1,
+      lineJoin: "round",
+      lineCap: "round",
+      zIndex: 50,
+    });
+    mapInstance.add(polyline);
+
+    // 创建起点标记 - 与 addTrack 一致的样式
+    const startMarker = new this.AMap.Marker({
+      position: path[0],
+      icon: new this.AMap.Icon({
+        image: null,
+        size: new this.AMap.Size(16, 16),
+      }),
+      content: `<div style="
+      width:16px;height:16px;
+      background:#fff;
+      border-radius:50%;
+      border:2px solid #fff;
+      box-shadow:0 0 4px #888;
+      "></div>`,
+      offset: new this.AMap.Pixel(-8, -8),
+      zIndex: 60,
+    });
+    mapInstance.add(startMarker);
+
+    // 创建终点标记 - 先隐藏，等到最后一个点时显示
+    const endMarker = new this.AMap.Marker({
+      position: path[path.length - 1],
+      icon: new this.AMap.Icon({
+        image: null,
+        size: new this.AMap.Size(22, 22),
+      }),
+      content: `<div style="
+      width:22px;height:22px;
+      background:#1890ff;
+      border-radius:50%;
+      border:3px solid #fff;
+      box-shadow:0 0 6px #1890ff;
+      "></div>`,
+      offset: new this.AMap.Pixel(-11, -11),
+      zIndex: 61,
+      visible: false, // 初始不可见
+    });
+    mapInstance.add(endMarker);
+
+    // 创建当前移动点标记
+    const currentMarker = new this.AMap.Marker({
+      position: path[0],
+      icon: new this.AMap.Icon({
+        image: null,
+        size: new this.AMap.Size(12, 12),
+      }),
+      content: `<div style="
+      width:12px;height:12px;
+      background:#1890ff;
+      border-radius:50%;
+      border:2px solid #fff;
+      box-shadow:0 0 4px rgba(0,0,0,0.3);
+      "></div>`,
+      offset: new this.AMap.Pixel(-6, -6),
+      zIndex: 100,
+    });
+    mapInstance.add(currentMarker);
+
+    let currentIndex = 0;
+    let timer = null;
+    let isRunning = false;
+
+    // 逐点添加
+    const addNextPoint = () => {
+      if (!isRunning) return;
+
+      currentIndex++;
+
+      // 判断是否结束
+      if (currentIndex >= path.length) {
+        // 显示终点标记
+        endMarker.show();
+        // 隐藏当前移动点
+        currentMarker.hide();
+
+        if (options.onFinish) options.onFinish();
+        isRunning = false;
+        return;
+      }
+
+      // 添加下一个点
+      const currentPath = path.slice(0, currentIndex + 1);
+      polyline.setPath(currentPath);
+      currentMarker.setPosition(path[currentIndex]);
+
+      // 调用进度回调
+      if (options.onProgress) {
+        const progress = currentIndex / (path.length - 1);
+        options.onProgress(currentIndex, path[currentIndex], progress);
+      }
+
+      // 设置下一个点的定时器
+      timer = setTimeout(addNextPoint, interval);
+    };
+
+    // 控制对象
+    const controller = {
+      start() {
+        if (isRunning) return this;
+        isRunning = true;
+        timer = setTimeout(addNextPoint, interval);
+        return this;
+      },
+
+      stop() {
+        isRunning = false;
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        return this;
+      },
+
+      destroy() {
+        this.stop();
+        // 使用保存的地图实例引用
+        if (polyline && mapInstance) mapInstance.remove(polyline);
+        if (startMarker && mapInstance) mapInstance.remove(startMarker);
+        if (endMarker && mapInstance) mapInstance.remove(endMarker);
+        if (currentMarker && mapInstance) mapInstance.remove(currentMarker);
+        return this;
+      },
+    };
+
+    // 保存到实例属性，便于后续管理
+    if (!this.stepTracks) this.stepTracks = [];
+    this.stepTracks.push({
+      polyline,
+      startMarker,
+      endMarker,
+      currentMarker,
+      controller,
+      path,
+    });
+
+    return controller;
+  }
+
+  /**
+   * 清除所有逐点创建的轨迹
+   */
+  clearStepTracks() {
+    if (!this.map || !this.stepTracks) return;
+
+    this.stepTracks.forEach((track) => {
+      track.controller.destroy();
+    });
+
+    this.stepTracks = [];
+  }
+  /**
+   * 移除指定轨迹
+   * @param {Object} trackObj - addTrack 返回的对象
+   */
+  removeTrack(trackObj) {
+    if (!this.map || !trackObj) return;
     if (trackObj.polyline) this.map.remove(trackObj.polyline);
     if (trackObj.startMarker) this.map.remove(trackObj.startMarker);
     if (trackObj.endMarker) this.map.remove(trackObj.endMarker);
-  });
-  this.tracks = [];
-}
+    if (this.tracks) {
+      this.tracks = this.tracks.filter((t) => t !== trackObj);
+    }
+  }
+
+  /**
+   * 移除所有轨迹
+   */
+  clearTracks() {
+    if (!this.map || !this.tracks) return;
+    this.tracks.forEach((trackObj) => {
+      if (trackObj.polyline) this.map.remove(trackObj.polyline);
+      if (trackObj.startMarker) this.map.remove(trackObj.startMarker);
+      if (trackObj.endMarker) this.map.remove(trackObj.endMarker);
+    });
+    this.tracks = [];
+  }
+  /**
+   * 获取鼠标工具实例
+   * @returns {Object} - MouseTool 实例
+   */
+  getMouseTool() {
+    if (!this.map || !this.AMap) {
+      console.warn("地图未初始化，请先调用initMap方法");
+      return null;
+    }
+
+    if (!this.mouseTool) {
+      this.mouseTool = new this.AMap.MouseTool(this.map);
+    }
+
+    return this.mouseTool;
+  }
+
+  /**
+   * 开启绘制模式
+   * @param {String} type - 绘制类型：marker/polyline/polygon/rectangle/circle
+   * @param {Object} options - 绘制参数
+   * @returns {Promise} - 返回绘制结果的Promise
+   */
+  draw(type, options = {}) {
+    const mouseTool = this.getMouseTool();
+    if (!mouseTool) return Promise.reject(new Error("MouseTool未初始化"));
+    this.map.setDefaultCursor("crosshair");
+    return new Promise((resolve) => {
+      // 监听绘制完成事件
+      mouseTool.on("draw", (event) => {
+        resolve(event.obj);
+      });
+
+      // 根据类型开启对应的绘制模式
+      switch (type) {
+        case "marker":
+          mouseTool.marker(options);
+          break;
+        case "polyline":
+          mouseTool.polyline(options);
+          break;
+        case "polygon":
+          mouseTool.polygon(options);
+          break;
+        case "rectangle":
+          mouseTool.rectangle(options);
+          break;
+        case "circle":
+          mouseTool.circle(options);
+          break;
+        default:
+          mouseTool.close();
+      }
+    });
+  }
+
+  /**
+   * 关闭绘制模式
+   */
+  closeDraw() {
+    if (this.mouseTool) {
+      this.map.setDefaultCursor("default");
+      this.mouseTool.close();
+    }
+  }
+  /**
+   * 设置地图旋转角度
+   * @param {Number} angle - 旋转角度，范围 [0-360]
+   * @param {Boolean} animate - 是否使用动画效果
+   * @param {Number} duration - 动画持续时间(毫秒)，默认300ms
+   */
+  setRotation(angle, animate = true, duration = 300) {
+    if (!this.map) return;
+    let currentRotation = this.map.getRotation();
+    if (animate) {
+      this.map.setRotation(currentRotation+=angle, true, duration);
+    } else {
+      this.map.setRotation(angle);
+    }
+  }
+
+  /**
+   * 获取当前地图旋转角度
+   * @returns {Number} - 当前旋转角度
+   */
+  getRotation() {
+    if (!this.map) return 0;
+    return this.map.getRotation();
+  }
+
+  /**
+   * 旋转地图到指定方向
+   * @param {String} direction - 方向：'north'(正北), 'east'(正东), 'south'(正南), 'west'(正西)
+   * @param {Boolean} animate - 是否使用动画效果
+   */
+  rotateToDirection(direction, animate = true) {
+    if (!this.map) return;
+
+    let angle = 0;
+    switch (direction.toLowerCase()) {
+      case "north":
+        angle = 0;
+        break;
+      case "east":
+        angle = 90;
+        break;
+      case "south":
+        angle = 180;
+        break;
+      case "west":
+        angle = 270;
+        break;
+      default:
+        angle = 0;
+    }
+
+    this.setRotation(angle, animate);
+  }
+
+  /**
+   * 启用/禁用地图旋转功能
+   * @param {Boolean} enabled - 是否启用
+   */
+  enableRotation(enabled = true) {
+    if (!this.map) return;
+
+    if (enabled) {
+      this.map.setStatus({
+        rotateEnable: true,
+      });
+    } else {
+      this.map.setStatus({
+        rotateEnable: false,
+      });
+    }
+  }
 }
 
 export default AMapService;
