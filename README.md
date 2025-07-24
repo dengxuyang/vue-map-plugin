@@ -65,10 +65,11 @@ app.mount('#app')
 ### 2. 使用地图容器组件
 
 ```vue
+ <!-- mapType 可选：amap | bmap | google -->
 <template>
   <MapContainer
     :containerId="'my-map'"
-    :mapType="'amap'"  <!-- 可选：amap | bmap | google -->
+    :mapType="'amap'" 
     :config="{
       center: [116.397428, 39.90923],
       zoom: 12
@@ -106,13 +107,53 @@ const amapService = mapServiceFactory.createService('amap')
 
 ## API 说明
 
-### MapContainer 组件 Props
+...existing code...
+
+## MapContainer 组件 Props
 
 | 属性         | 类型     | 说明                       |
 | ------------ | -------- | -------------------------- |
 | containerId  | String   | 容器 DOM id                |
 | mapType      | String   | 地图类型：amap/bmap/google |
 | config       | Object   | 地图初始化配置             |
+
+### config 配置详解（以高德地图为例）
+
+`config` 是传递给地图初始化的参数对象，常用配置如下：
+
+| 配置项         | 类型           | 说明                                                                                  | 示例值                        |
+| -------------- | -------------- | ------------------------------------------------------------------------------------- | ----------------------------- |
+| center         | Array          | 地图中心点坐标 `[lng, lat]`                                                           | `[116.397428, 39.90923]`      |
+| zoom           | Number         | 地图缩放级别（3-20）                                                                  | `12`                          |
+| layers         | Array          | 地图图层（如卫星、路网等），一般无需手动设置，推荐用 `tileLayer` 字段                  | `[new AMap.TileLayer()]`      |
+| tileLayer      | String         | 快速切换底图类型，可选值：`"Satellite"`（卫星图），不传为默认矢量                       | `"Satellite"`                 |
+| viewMode       | String         | 地图视图模式，可选 `"2D"` 或 `"3D"`                                                   | `"2D"`                        |
+| pitch          | Number         | 俯仰角度，仅 3D 模式下有效                                                            | `0`                           |
+| rotation       | Number         | 地图旋转角度，范围 [0-360]                                                            | `0`                           |
+| animateEnable  | Boolean        | 是否允许有动画效果                                                                    | `true`                        |
+| showLabel      | Boolean        | 是否显示地图文字标注                                                                  | `true`                        |
+| features       | Array          | 地图显示要素，如 `["bg", "road", "point"]`                                            | `["bg", "road", "point"]`     |
+| mapStyle       | String         | 地图自定义样式，详见高德官方文档                                                      | `"amap://styles/whitesmoke"`  |
+| ...            | ...            | 其他高德地图支持的初始化参数，详见[官方文档](https://lbs.amap.com/api/jsapi-v2/documentation#map) |                               |
+
+#### 示例
+
+```js
+const config = {
+  center: [116.397428, 39.90923], // 中心点
+  zoom: 12,                       // 缩放级别
+  tileLayer: "Satellite",         // 卫星底图（可选）
+  viewMode: "2D",                 // 2D/3D
+  animateEnable: true,            // 动画
+  showLabel: true,                // 显示文字标注
+  mapStyle: "amap://styles/whitesmoke" // 自定义样式
+}
+```
+
+> **注意：**
+> - `tileLayer: "Satellite"` 时会自动叠加卫星和路网图层，无需手动配置 `layers`。
+> - 其他参数可参考 [高德地图 JSAPI v2.0 Map 配置文档](https://lbs.amap.com/api/jsapi-v2/documentation#map)。
+
 
 ### 事件
 

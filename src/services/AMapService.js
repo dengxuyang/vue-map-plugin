@@ -53,7 +53,41 @@ class AMapService {
       throw error;
     }
   }
-
+/**
+ * 获取用户当前位置
+ * @returns {Promise} - resolve({lng, lat, position, address})，reject(error)
+ */
+getCurrentPosition() {
+  return new Promise((resolve, reject) => {
+    if (!this.map || !this.AMap) {
+      reject(new Error("地图未初始化"));
+      return;
+    }
+    if (!this.AMap.Geolocation) {
+      reject(new Error("未加载 Geolocation 插件"));
+      return;
+    }
+    const geolocation = new this.AMap.Geolocation({
+      enableHighAccuracy: true, // 是否使用高精度定位
+      timeout: 10000,           // 超时时间
+      maximumAge: 0,            // 定位结果缓存0毫秒
+      convert: true,            // 自动偏移到高德坐标
+      showButton: false,        // 不显示定位按钮
+    });
+    geolocation.getCurrentPosition((status, result) => {
+      if (status === 'complete' && result.position) {
+        resolve({
+          lng: result.position.lng,
+          lat: result.position.lat,
+          position: result.position,
+          address: result.formattedAddress || ''
+        });
+      } else {
+        reject(result);
+      }
+    });
+  });
+}
   /**
    * 添加标记点
    * @param {Object} options - 标记点配置
